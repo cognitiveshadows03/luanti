@@ -154,3 +154,60 @@ workflow builds both an AAB and APKs automatically on push.
 * A thin Minecraft-style crosshair and HUD relayout.
 * Reduce the first-run cost of `assets.zip` extraction on slow storage.
 * Optional: drop `menu/` background PNGs from the APK assets on the potato tier.
+
+---
+
+## Android touch controls (MCPE match)
+
+![layout] The `minecraft` touch preset follows the Pocket Edition reference:
+
+```
+ ┌──────────────────────────────────────────────────────────┐
+ │                                    [⋯] [chat]            │
+ │                           [fly] [↑ jump]                 │
+ │                     [grid][hand] [↓ sneak]               │
+ │       ┌────────┐                                     │
+ │       │        │            [sword]                     │
+ │       │  stick │                                        │
+ │       └────────┘   ▓▓ hotbar ▓▓                         │
+ └──────────────────────────────────────────────────────────┘
+```
+
+Regenerate the button art at any time with:
+
+```sh
+python3 util/mc_edition/gen_touch_textures.py
+```
+
+It is all procedural (bevelled stone plates, sword/hand/grid glyphs, translucent
+rounded-square joystick, plain white crosshair) so nothing is ripped from
+Minecraft and the repo stays license-clean.
+
+`touch_interaction_style` defaults to `buttons_crosshair` on Android, so the
+sword and hand buttons dig and place the way MCPE does instead of tapping
+through the crosshair.
+
+## Signed APK
+
+`.github/workflows/android-signed.yml` produces signed APKs for all four ABIs,
+verifies each with `apksigner`, uploads them as artifacts and attaches them to
+the GitHub Release when you push a `v*` tag.
+
+Add these repository secrets to sign with your own key:
+
+| Secret | Value |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | `base64 -w0 release.jks` |
+| `ANDROID_KEYSTORE_PASSWORD` | keystore password |
+| `ANDROID_KEY_ALIAS` | key alias |
+| `ANDROID_KEY_PASSWORD` | key password |
+
+Without them the workflow still builds and uploads **debug-signed** APKs so you
+can install on a device immediately; it emits a warning telling you what is
+missing.
+
+## Java mods
+
+See [JAVA_MODS.md](JAVA_MODS.md) — a full, sourced explanation of why Fabric /
+Forge jars cannot run (including the reference project's own documentation), and
+the jar-data importer that is the actually-buildable alternative.
