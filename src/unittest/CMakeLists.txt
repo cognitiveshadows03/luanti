@@ -4,6 +4,7 @@ set(unittest_SRCS
 	${unittest_HDRS}
 	${CMAKE_CURRENT_SOURCE_DIR}/test.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/test_address.cpp
+	${CMAKE_CURRENT_SOURCE_DIR}/test_lan_discovery.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/test_authdatabase.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/test_activeobject.cpp
 	${CMAKE_CURRENT_SOURCE_DIR}/test_areastore.cpp

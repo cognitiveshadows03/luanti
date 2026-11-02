@@ -615,6 +615,11 @@ void set_default_settings()
 
 	// Server list announcing
 	settings->setDefault("server_announce", "false");
+	// LAN discovery: lets clients on the same network list this game without
+	// being given an IP address. See src/network/lan_discovery.h.
+	settings->setDefault("lan_discovery_announce", "true");
+	settings->setDefault("lan_discovery_port", "30001");
+	settings->setDefault("lan_discovery_timeout_ms", "1200");
 	settings->setDefault("server_url", "");
 	settings->setDefault("server_address", "");
 	settings->setDefault("server_name", "");

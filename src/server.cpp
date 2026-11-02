@@ -630,11 +630,60 @@ void Server::start()
 			<< "\" listening on ";
 	m_bind_addr.print(actionstream);
 	actionstream << "." << std::endl;
+
+	startLanAnnouncer();
+}
+
+/*
+	Answer LAN discovery queries so other players on the same network can find
+	this game without being told an IP address.
+
+	The advertised details are rebuilt per query from live state, so the player
+	count is always current.
+*/
+void Server::startLanAnnouncer()
+{
+	if (!g_settings->getBool("lan_discovery_announce"))
+		return;
+
+	const u16 port = (u16)std::min<s32>(65535,
+			std::max<s32>(1, g_settings->getS32("lan_discovery_port")));
+
+	m_lan_announcer.start(port, [this]() -> std::string {
+		std::string name = g_settings->get("server_name");
+		if (name.empty())
+			name = g_settings->get("server_description");
+		if (name.empty()) {
+			// Fall back to the world folder name, which is what a player
+			// recognises on the other machine.
+			name = m_path_world;
+			auto slash = name.find_last_of("/\\");
+			if (slash != std::string::npos)
+				name = name.substr(slash + 1);
+		}
+		if (name.empty())
+			name = "Luanti game";
+
+		// The game port is what clients connect to; fall back to the
+		// configured remote port when bound to an ephemeral one.
+		u16 game_port = m_bind_addr.getPort();
+		if (game_port == 0)
+			game_port = (u16)g_settings->getU16("port");
+
+		std::ostringstream os;
+		os << " " << (int)game_port << " "
+			<< (int)m_clients.getPlayerNames().size() << " "
+			<< (int)g_settings->getU16("max_users")
+			<< " " << name;
+		return os.str();
+	});
 }
 
 void Server::stop()
 {
 	infostream<<"Server: Stopping and waiting for threads"<<std::endl;
+
+	m_lan_announcer.stop();
 
 	// Stop threads (set run=false first so both start stopping)
 	m_thread->stop();

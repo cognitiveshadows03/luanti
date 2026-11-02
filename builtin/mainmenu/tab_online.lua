@@ -114,6 +114,10 @@ local function get_formspec(tabview, name, tabdata)
 		"tooltip[btn_mp_search;" .. fgettext("Search") .. "]" ..
 		-- TRANSLATORS: As in 'reload'/'check again'
 		"tooltip[btn_mp_refresh;" .. fgettext("Refresh") .. "]" ..
+		"button[2.4,0;2.1,0.75;btn_lan_discover;" ..
+			fgettext("Scan LAN") .. "]" ..
+		"tooltip[btn_lan_discover;" ..
+			fgettext("Look for games hosted on this local network") .. "]" ..
 		"container_end[]" ..
 
 		"container[9.75,0]" ..
@@ -589,6 +593,38 @@ local function main_button_handler(tabview, fields, name, tabdata)
 
 	if fields.btn_mp_refresh then
 		serverlistmgr.sync()
+		return true
+	end
+
+	if fields.btn_lan_discover then
+		-- Blocks for a moment (about a second) while the network answers.
+		local found = core.get_lan_servers and core.get_lan_servers() or {}
+
+		if #found == 0 then
+			core.show_message(fgettext("No games found on this network."))
+		elseif #found == 1 then
+			local srv = found[1]
+			core.settings:set("address", srv.address)
+			core.settings:set("remote_port", srv.port)
+			core.show_message(fgettext("Found: $1", srv.name))
+		else
+			-- Several: hand over to the address field with the busiest first
+			table.sort(found, function(a, b)
+				if a.players ~= b.players then return a.players > b.players end
+				return a.name < b.name
+			end)
+			local srv = found[1]
+			core.settings:set("address", srv.address)
+			core.settings:set("remote_port", srv.port)
+
+			local lines = {}
+			for _, s2 in ipairs(found) do
+				lines[#lines + 1] = ("%s  (%s:%d, %d/%d)")
+					:format(s2.name, s2.address, s2.port, s2.players, s2.max_players)
+			end
+			core.show_message(fgettext("Found $1 games; the first is filled in:\n$2",
+				#found, table.concat(lines, "\n")))
+		end
 		return true
 	end
 

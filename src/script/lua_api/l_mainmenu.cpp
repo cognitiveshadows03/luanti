@@ -22,6 +22,7 @@
 #include "client/renderingengine.h"
 #include "client/texturepaths.h"
 #include "network/networkprotocol.h"
+#include "network/lan_discovery.h"
 #include "content/mod_configuration.h"
 #include "common/c_converter.h"
 #include "gui/guiOpenURL.h"
@@ -738,6 +739,40 @@ int ModApiMainMenu::l_get_user_path(lua_State *L)
 }
 
 /******************************************************************************/
+int ModApiMainMenu::l_get_lan_servers(lua_State *L)
+{
+	u16 port = (u16)std::min<s32>(65535,
+			std::max<s32>(1, g_settings->getS32("lan_discovery_port")));
+	int timeout = std::min(10000,
+			std::max(100, g_settings->getS32("lan_discovery_timeout_ms")));
+
+	std::vector<LanServer> servers = discover_lan_servers(port, timeout);
+
+	lua_newtable(L);
+	int i = 0;
+	for (const LanServer &srv : servers) {
+		lua_newtable(L);
+		lua_pushstring(L, "name");
+		lua_pushstring(L, srv.name.c_str());
+		lua_settable(L, -3);
+		lua_pushstring(L, "address");
+		lua_pushstring(L, srv.address.c_str());
+		lua_settable(L, -3);
+		lua_pushstring(L, "port");
+		lua_pushinteger(L, srv.port);
+		lua_settable(L, -3);
+		lua_pushstring(L, "players");
+		lua_pushinteger(L, srv.players);
+		lua_settable(L, -3);
+		lua_pushstring(L, "max_players");
+		lua_pushinteger(L, srv.max_players);
+		lua_settable(L, -3);
+		lua_rawseti(L, -2, ++i);
+	}
+	return 1;
+}
+
+/******************************************************************************/
 int ModApiMainMenu::l_get_modpath(lua_State *L)
 {
 	std::string modpath = fs::RemoveRelativePathComponents(
@@ -1149,6 +1184,7 @@ void ModApiMainMenu::Initialize(lua_State *L, int top)
 	API_FCT(set_topleft_text);
 	API_FCT(get_mapgen_names);
 	API_FCT(get_user_path);
+	API_FCT(get_lan_servers);
 	API_FCT(get_modpath);
 	API_FCT(get_modpaths);
 	API_FCT(get_clientmodpath);
@@ -1192,6 +1228,7 @@ void ModApiMainMenu::InitializeAsync(lua_State *L, int top)
 	API_FCT(get_games);
 	API_FCT(get_mapgen_names);
 	API_FCT(get_user_path);
+	API_FCT(get_lan_servers);
 	API_FCT(get_modpath);
 	API_FCT(get_modpaths);
 	API_FCT(get_clientmodpath);

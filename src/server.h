@@ -10,6 +10,7 @@
 #include "gamedef.h"
 #include "content/subgames.h"
 #include "network/peerhandler.h"
+#include "network/lan_discovery.h"
 #include "network/socket.h"
 #include "util/thread.h"
 #include "util/basic_macros.h"
@@ -811,6 +812,11 @@ private:
 
 	// Server metrics
 	MetricCounterPtr m_uptime_counter;
+
+	// Answers LAN discovery queries so clients can find this game without
+	// typing an IP address.
+	LanAnnouncer m_lan_announcer;
+	void startLanAnnouncer();
 	MetricGaugePtr m_player_gauge;
 	MetricGaugePtr m_timeofday_gauge;
 	MetricGaugePtr m_lag_gauge;
