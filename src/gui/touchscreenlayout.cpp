@@ -213,39 +213,59 @@ ButtonLayout ButtonLayout::postProcessLoaded(const ButtonMap &data)
 }
 
 /*
-	Minecraft-Bedrock-style touch controls.
+	Minecraft-Pocket-Edition-style touch controls.
 
-	A compact 2x2 diamond in the bottom-right corner, where a right thumb rests
-	naturally: jump (big, closest to the corner), sneak, fly and inventory.
-	Chat and the overflow menu sit in the top-right corner, out of the way of
-	gameplay. The movement joystick stays in the bottom-left corner, exactly
-	like Minecraft. No zoom / aux1 / minimap buttons, because stock Minecraft
-	has none.
+	Mirrors the stock MCPE arrangement (see util/mc_edition/gen_touch_textures.py
+	for the matching button art):
+
+	  - movement joystick, bottom-left;
+	  - jump / sneak arrows stacked in the top-right corner;
+	  - the dig (sword) and place (hand) buttons in the lower-right thumb arc,
+	    with the inventory next to them;
+	  - chat and the overflow menu tucked in the top-right.
+
+	This preset is only used when touch_interaction_style is
+	"buttons_crosshair", which is what the Android defaults select.
 */
 const ButtonLayout::ButtonMap ButtonLayout::minecraft_data {
-	{jump_id, {
+	// --- right thumb arc: dig (sword) and place (hand) -----------------
+	{dig_id, {
 		v2f(1.0f, 1.0f),
-		v2f(-1.2f, -1.2f),
+		v2f(-2.30f, -2.65f),
 	}},
-	{sneak_id, {
+	{place_id, {
 		v2f(1.0f, 1.0f),
-		v2f(-2.5f, -1.2f),
-	}},
-	{fly_id, {
-		v2f(1.0f, 1.0f),
-		v2f(-1.2f, -2.5f),
+		v2f(-1.05f, -1.40f),
 	}},
 	{inventory_id, {
 		v2f(1.0f, 1.0f),
-		v2f(-2.5f, -2.5f),
+		v2f(-2.30f, -1.40f),
+	}},
+	// --- right edge: jump (big, in the corner) and sneak below it ------
+	{jump_id, {
+		v2f(1.0f, 0.0f),
+		v2f(-0.72f, 1.55f),
+	}},
+	{sneak_id, {
+		v2f(1.0f, 0.0f),
+		v2f(-0.72f, 2.75f),
+	}},
+	// --- secondary buttons, kept out of the thumb's way ---------------
+	{fly_id, {
+		v2f(1.0f, 0.0f),
+		v2f(-1.95f, 1.55f),
+	}},
+	{camera_id, {
+		v2f(1.0f, 0.0f),
+		v2f(-1.95f, 2.75f),
 	}},
 	{chat_id, {
 		v2f(1.0f, 0.0f),
-		v2f(-0.75f, 0.75f),
+		v2f(-3.05f, 0.72f),
 	}},
 	{overflow_id, {
 		v2f(1.0f, 0.0f),
-		v2f(-0.75f, 1.95f),
+		v2f(-4.15f, 0.72f),
 	}},
 };
 

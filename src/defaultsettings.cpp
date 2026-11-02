@@ -678,6 +678,9 @@ void set_default_settings()
 	// Minecraft-style touch controls (see touchscreenlayout.cpp)
 	settings->setDefault("touch_layout_preset", "minecraft");
 	settings->setDefault("fixed_virtual_joystick", "true");
+	// MCPE uses dedicated dig/place buttons in the right thumb arc instead of
+	// tapping the world, so the crosshair always aims.
+	settings->setDefault("touch_interaction_style", "buttons_crosshair");
 	settings->setDefault("touchscreen_sensitivity", "0.25");
 	settings->setDefault("autojump", "true");
 #endif

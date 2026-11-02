@@ -290,9 +290,27 @@ local function create_world_formspec(dialogdata)
 
 	end
 
+	-- Minecraft-style "Game Mode" and "Difficulty" pickers. These map onto the
+	-- engine settings that the bundled game already honours.
+	local gamemode_idx = dialogdata.gamemode == "creative" and 2 or 1
+	local difficulty_idx = ({
+		peaceful = 1, easy = 2, normal = 3, hard = 4,
+	})[dialogdata.difficulty] or 3
+
 	retval = retval ..
-		"label[0,2;" .. fgettext("Mapgen") .. "]"..
-		"dropdown[0,2.5;6.3;dd_mapgen;" .. mglist .. ";" .. selindex .. "]"
+		"label[0.3,3.05;" .. fgettext("Game Mode") .. "]"..
+		"dropdown[0.3,3.4;3,0.5;dd_gamemode;" ..
+			fgettext("Survival") .. "," .. fgettext("Creative") .. ";" ..
+			gamemode_idx .. "]"..
+		"label[3.55,3.05;" .. fgettext("Difficulty") .. "]"..
+		"dropdown[3.55,3.4;3,0.5;dd_difficulty;" ..
+			fgettext("Peaceful") .. "," .. fgettext("Easy") .. "," ..
+			fgettext("Normal") .. "," .. fgettext("Hard") .. ";" ..
+			difficulty_idx .. "]"
+
+	retval = retval ..
+		"label[0,4.2;" .. fgettext("Map generator") .. "]"..
+		"dropdown[0,4.5;6.3;dd_mapgen;" .. mglist .. ";" .. selindex .. "]"
 
 	-- Warning when making a devtest world
 	if game.id == "devtest" then
@@ -324,7 +342,29 @@ local function create_world_formspec(dialogdata)
 
 end
 
-local function create_world_buttonhandler(this, fields)
+-- Dropdowns hand back the selected label, which may be translated. Accept
+-- either the 1-based index (some engines) or the label text.
+local function resolve_dropdown(value, keys, labels)
+	if value == nil then return nil end
+	local idx = tonumber(value)
+	if idx and keys[idx] then
+		return keys[idx]
+	end
+	for i, label in ipairs(labels) do
+		if value == label then
+			return keys[i]
+		end
+	end
+	-- untranslated fallback
+	for i, key in ipairs(keys) do
+		if value == key then
+			return key
+		end
+	end
+	return nil
+end
+
+function create_world_buttonhandler(this, fields)
 
 	if fields["world_create_open_cdb"] then
 		local dlg = create_contentdb_dlg("game")
@@ -380,6 +420,13 @@ local function create_world_buttonhandler(this, fields)
 			local settings = {
 				fixed_map_seed = this.data.seed,
 				mg_name = this.data.mg,
+				-- Minecraft-style options
+				creative_mode = this.data.gamemode == "creative" and "true" or "false",
+				enable_damage = (this.data.gamemode == "survival"
+						and this.data.difficulty ~= "peaceful") and "true" or "false",
+				mob_difficulty = ({
+					peaceful = "0", easy = "1", normal = "2", hard = "3",
+				})[this.data.difficulty] or "2",
 				mg_flags = table_to_flags(this.data.flags.main),
 				mgv5_spflags = table_to_flags(this.data.flags.v5),
 				mgv6_spflags = table_to_flags(this.data.flags.v6),
@@ -448,6 +495,26 @@ local function create_world_buttonhandler(this, fields)
 		return true
 	end
 
+	-- Minecraft-style world options. Dropdown values arrive as the selected
+	-- label text, which may be translated, so resolve by position first and
+	-- fall back to matching the label.
+	if fields["dd_gamemode"] then
+		local modes = {"survival", "creative"}
+		this.data.gamemode = resolve_dropdown(fields["dd_gamemode"], modes,
+				{fgettext("Survival"), fgettext("Creative")}) or "survival"
+		core.settings:set("menu_new_world_gamemode", this.data.gamemode)
+		return true
+	end
+
+	if fields["dd_difficulty"] then
+		local levels = {"peaceful", "easy", "normal", "hard"}
+		this.data.difficulty = resolve_dropdown(fields["dd_difficulty"], levels,
+				{fgettext("Peaceful"), fgettext("Easy"), fgettext("Normal"),
+				fgettext("Hard")}) or "normal"
+		core.settings:set("menu_new_world_difficulty", this.data.difficulty)
+		return true
+	end
+
 	return false
 end
 
@@ -459,6 +526,9 @@ function create_create_world_dlg()
 					nil)
 	retval.data = {
 		worldname = "",
+		-- Minecraft-style world options
+		gamemode = core.settings:get("menu_new_world_gamemode") or "survival",
+		difficulty = core.settings:get("menu_new_world_difficulty") or "normal",
 		-- settings the world is created with:
 		seed = core.settings:get("fixed_map_seed") or "",
 		flags = {

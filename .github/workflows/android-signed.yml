@@ -1,0 +1,160 @@
+name: android-signed
+
+# Builds a *signed* Android APK (all four ABIs) and Uploads it as a workflow
+# artifact. Also attaches it to the GitHub Release when you push a tag.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   ANDROID_KEYSTORE_BASE64  - your .jks / .keystore file, base64 encoded:
+#                                base64 -w0 my-release-key.jks
+#   ANDROID_KEYSTORE_PASSWORD - the keystore password
+#   ANDROID_KEY_ALIAS         - the key alias inside the keystore
+#   ANDROID_KEY_PASSWORD      - the password for that key
+#
+# Optional: set ANDROID_KEYSTORE_FILE to the name you want the decoded keystore
+# to have. Defaults to "release.jks".
+#
+# No secrets configured? The workflow still builds and uploads *debug-signed*
+# APKs so you can install and test on a device. Look at the "Signing" step in
+# the log to see which mode was used.
+
+on:
+  push:
+    branches: [master, main, mc-edition]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The bundled game lives in the repo; make sure LFS-ish large trees
+          # are fetched too.
+          fetch-depth: 1
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gettext
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle', 'android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Cache native build (NDK)
+        uses: actions/cache@v4
+        with:
+          path: android/native/.cxx
+          key: ndk-${{ runner.os }}-${{ hashFiles('src/**', 'irr/**', 'lib/**', 'CMakeLists.txt') }}
+          restore-keys: ndk-${{ runner.os }}-
+
+      - name: Detect signing mode
+        id: signing
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "mode=release" >> "$GITHUB_OUTPUT"
+            echo "Keystore secret found - building a RELEASE-signed APK."
+          else
+            echo "mode=debug" >> "$GITHUB_OUTPUT"
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret set - falling back to DEBUG signing. Add the secrets listed at the top of this workflow to produce a release-signed APK."
+          fi
+
+      - name: Decode keystore
+        if: steps.signing.outputs.mode == 'release'
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_FILE: ${{ vars.ANDROID_KEYSTORE_FILE }}
+        run: |
+          mkdir -p android/keystore
+          NAME="${KS_FILE:-release.jks}"
+          echo "$KS_B64" | base64 -d > "android/keystore/$NAME"
+          # write local.properties, which android/app/build.gradle reads
+          cat > android/local.properties <<EOF
+          keystore=keystore/$NAME
+          keystore.password=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          key=${{ secrets.ANDROID_KEY_ALIAS }}
+          key.password=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+          chmod 600 android/local.properties
+          echo "Keystore written to android/keystore/$NAME"
+
+      - name: Build signed release APKs
+        if: steps.signing.outputs.mode == 'release'
+        working-directory: android
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Build debug APKs
+        if: steps.signing.outputs.mode == 'debug'
+        working-directory: android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Collect APKs
+        id: collect
+        run: |
+          set -e
+          mkdir -p dist
+          if [ "${{ steps.signing.outputs.mode }}" = "release" ]; then
+            find android/app/build/outputs/apk/release -name '*.apk' -exec cp {} dist/ \;
+            SUFFIX="release"
+          else
+            find android/app/build/outputs/apk/debug -name '*.apk' -exec cp {} dist/ \;
+            SUFFIX="debug"
+          fi
+          # Give every APK a readable name: luanti-mc-<abi>-<suffix>.apk
+          cd dist
+          for f in *.apk; do
+            case "$f" in
+              *arm64-v8a*)   mv "$f" "luanti-mc-arm64-v8a-$SUFFIX.apk" ;;
+              *armeabi-v7a*) mv "$f" "luanti-mc-armeabi-v7a-$SUFFIX.apk" ;;
+              *x86_64*)      mv "$f" "luanti-mc-x86_64-$SUFFIX.apk" ;;
+              *x86*)         mv "$f" "luanti-mc-x86-$SUFFIX.apk" ;;
+            esac
+          done
+          ls -lh
+          echo "count=$(ls -1 *.apk | wc -l)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify APK signatures
+        run: |
+          BT=$(ls "$ANDROID_HOME"/build-tools | sort -V | tail -1)
+          APKSIGNER="$ANDROID_HOME/build-tools/$BT/apksigner"
+          for f in dist/*.apk; do
+            echo "== $f =="
+            "$APKSIGNER" verify --print-certs "$f" || {
+              echo "::error::$f failed signature verification"; exit 1; }
+          done
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: luanti-mc-apks-${{ steps.signing.outputs.mode }}
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attach APKs to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.apk
+          generate_release_notes: true
