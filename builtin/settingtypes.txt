@@ -371,6 +371,14 @@ invert_hotbar_mouse_wheel (Hotbar: Invert mouse wheel direction) bool false
 #    Requires: touch_support
 touch_controls (Touchscreen controls) enum auto auto,true,false
 
+#    Selects the built-in touchscreen button layout, used as long as no custom
+#    layout has been made with the touchscreen layout editor.
+#    "minecraft" places jump/sneak/fly/inventory in a thumb-friendly cluster in
+#    the bottom-right corner and puts chat plus the overflow menu in the
+#    top-right corner, like Minecraft Bedrock Edition.
+#    Requires: touch_support
+touch_layout_preset (Touchscreen layout preset) enum luanti luanti,minecraft
+
 #    The kind of digging/placing controls used.
 #
 #    * Tap

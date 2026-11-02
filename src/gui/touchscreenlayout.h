@@ -90,7 +90,8 @@ struct ButtonLayout {
 	static bool isButtonRequired(touch_gui_button_id id);
 	static s32 getButtonSize(v2u32 screensize);
 
-	// Returns the default layout.
+	// Returns the default layout, honouring "touch_layout_preset"
+	// ("luanti" or "minecraft").
 	// Note: Indirectly depends on settings.
 	static ButtonLayout loadDefault();
 	// Reads the layout from the "touch_layout" setting. Falls back to loadDefault
@@ -119,7 +120,10 @@ struct ButtonLayout {
 	void serializeJson(std::ostream &os) const;
 
 private:
+	// Preset layouts. "touch_layout_preset" selects which one loadDefault()
+	// returns.
 	static const ButtonMap default_data;
+	static const ButtonMap minecraft_data;
 	static ButtonMap deserializeJson(std::istream &is);
 	static ButtonLayout postProcessLoaded(const ButtonMap &map);
 };

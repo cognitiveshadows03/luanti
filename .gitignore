@@ -61,6 +61,8 @@ AppDir
 /bin/
 /games/*
 !/games/devtest/
+# Bundled game (see MC_EDITION.md)
+!/games/voxelibre/
 /games/devtest/mods/soundstuff/sounds/gitignored_sounds/*
 !/games/devtest/mods/soundstuff/sounds/gitignored_sounds/custom_sounds_here.txt
 /cache

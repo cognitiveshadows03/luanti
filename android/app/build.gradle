@@ -105,6 +105,15 @@ tasks.register("prepareAssets") {
 		copy {
 			from "${projRoot}/textures/base/pack" into "${assetsFolder}/textures/base/pack"
 		}
+		// Bundle the games that ship with the app so the player can start
+		// playing immediately after installing (no content download needed).
+		// devtest is a developer sandbox and is left out to keep the APK small.
+		copy {
+			from("${projRoot}/games") {
+				exclude "devtest/**"
+			}
+			into "${assetsFolder}/games"
+		}
 		copy {
 			from "${localeFolder}" into "${assetsFolder}/locale"
 		}

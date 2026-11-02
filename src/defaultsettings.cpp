@@ -12,6 +12,10 @@
 #include "util/string.h"
 #include "server.h" // flagdesc_anticheat
 
+#if defined(__ANDROID__) || defined(__linux__)
+#include <unistd.h>
+#endif
+
 
 /*
  * inspired by https://github.com/systemd/systemd/blob/7aed43437175623e0f3ae8b071bbc500c13ce893/src/hostname/hostnamed.c#L406
@@ -66,6 +70,77 @@ static bool detect_touch()
 #else
 	// we don't know, return default
 	return false;
+#endif
+}
+
+/*
+	Automatic quality profiling.
+
+	Aims to make the game play smoothly on old / cheap hardware (mainly low-end
+	Android phones) without asking the user to touch a single setting.
+
+	Every value written here is a *default* only: anything the user (or the
+	game) puts into minetest.conf still wins.
+*/
+enum class PerfTier {
+	POTATO, // e.g. 512 MB - 1.4 GB RAM, dual core or worse
+	LOW,    // e.g. budget phones, 2 GB RAM
+	MID,    // typical mid-range phone, 3 - 5 GB RAM
+	HIGH,   // flagships
+};
+
+static const char *perf_tier_name(PerfTier tier)
+{
+	switch (tier) {
+	case PerfTier::POTATO: return "potato";
+	case PerfTier::LOW:    return "low";
+	case PerfTier::MID:    return "mid";
+	case PerfTier::HIGH:   return "high";
+	}
+	return "mid";
+}
+
+// Total physical RAM in MiB, or 0 if it cannot be determined.
+static u64 detect_total_ram_mb()
+{
+#if defined(__ANDROID__) || defined(__linux__)
+	long pages = sysconf(_SC_PHYS_PAGES);
+	long page_size = sysconf(_SC_PAGE_SIZE);
+	if (pages > 0 && page_size > 0)
+		return (u64)pages * (u64)page_size / (1024 * 1024);
+#endif
+	return 0;
+}
+
+static PerfTier detect_perf_tier()
+{
+#if defined(__ANDROID__) || defined(__linux__)
+	long cores = sysconf(_SC_NPROCESSORS_ONLN);
+	const u64 ram_mb = detect_total_ram_mb();
+
+	// Ram unknown (some old kernels): assume mid-range instead of crippling
+	// the game for everyone.
+	if (ram_mb == 0)
+		return PerfTier::MID;
+
+	// A huge framebuffer costs GPU time no matter how much RAM there is,
+	// because Luanti is fill-rate bound on integrated/mobile GPUs.
+#ifdef __ANDROID__
+	const v2u32 display = porting::getDisplaySize();
+	const bool big_screen = (u64)display.X * display.Y > 1920ull * 1080ull;
+#else
+	const bool big_screen = false;
+#endif
+
+	if (ram_mb <= 1400 || (cores > 0 && cores <= 2))
+		return PerfTier::POTATO;
+	if (ram_mb <= 2900 || big_screen)
+		return PerfTier::LOW;
+	if (ram_mb <= 5500)
+		return PerfTier::MID;
+	return PerfTier::HIGH;
+#else
+	return PerfTier::MID;
 #endif
 }
 
@@ -551,6 +626,8 @@ void set_default_settings()
 	settings->setDefault("dpi_change_notifier", "0"); // (not a real setting)
 
 	settings->setDefault("touch_layout", "");
+	// "luanti" or "minecraft". Android defaults to "minecraft"; see below.
+	settings->setDefault("touch_layout_preset", "luanti");
 	settings->setDefault("touchscreen_sensitivity", "0.2");
 	settings->setDefault("touchscreen_threshold", "20");
 	settings->setDefault("touch_long_tap_delay", "400");
@@ -568,13 +645,8 @@ void set_default_settings()
 	settings->setDefault("max_simultaneous_block_sends_per_client", "20");
 	settings->setDefault("emergequeue_limit_diskonly", "32");
 	settings->setDefault("emergequeue_limit_generate", "32");
-	settings->setDefault("max_block_generate_distance", "5");
 	settings->setDefault("sqlite_synchronous", "1");
 	settings->setDefault("server_map_save_interval", "15");
-	settings->setDefault("client_mapblock_limit", "2200"); // about 35 MB
-	settings->setDefault("active_block_range", "3");
-	settings->setDefault("viewing_range", "80");
-	settings->setDefault("leaves_style", "simple");
 	// Note: OpenGL ES 2.0 is not guaranteed to provide depth textures,
 	// which we would need for PP.
 	settings->setDefault("enable_post_processing", "false");
@@ -602,5 +674,106 @@ void set_default_settings()
 		settings->setDefault("mono_font_size", "14");
 	}
 	// Tablets >= 6.0 use non-Android defaults for these settings
+
+	// Minecraft-style touch controls (see touchscreenlayout.cpp)
+	settings->setDefault("touch_layout_preset", "minecraft");
+	settings->setDefault("fixed_virtual_joystick", "true");
+	settings->setDefault("touchscreen_sensitivity", "0.25");
+	settings->setDefault("autojump", "true");
 #endif
+
+	// ------------------------------------------------------------------
+	// Visual identity: stock-Minecraft-like out of the box.
+	// ------------------------------------------------------------------
+	settings->setDefault("fov", "70");                  // MC default FOV
+	settings->setDefault("view_bobbing_amount", "1.0"); // MC head bobbing
+	settings->setDefault("node_highlighting", "box");   // MC block outline
+	settings->setDefault("selectionbox_width", "2");
+	settings->setDefault("crosshair_alpha", "255");
+	settings->setDefault("enable_dig_particles", "true"); // MC break particles
+	settings->setDefault("cinematic", "false");
+	settings->setDefault("camera_smoothing", "0.0");
+
+
+	// ------------------------------------------------------------------
+	// Automatic quality profile (see detect_perf_tier() above). Exposed
+	// to Lua as "luanti_perf_tier" so a game can adapt too.
+	// ------------------------------------------------------------------
+	const PerfTier tier = detect_perf_tier();
+	settings->setDefault("luanti_perf_tier", perf_tier_name(tier));
+
+	switch (tier) {
+	case PerfTier::POTATO:
+		settings->setDefault("viewing_range", "56");
+		settings->setDefault("fps_max", "30");
+		settings->setDefault("leaves_style", "opaque");
+		settings->setDefault("smooth_lighting", "false");
+		settings->setDefault("enable_3d_clouds", "false");
+		settings->setDefault("menu_clouds", "false");
+		settings->setDefault("translucent_liquids", "false");
+		settings->setDefault("enable_dig_particles", "false");
+		settings->setDefault("client_mesh_chunk", "4");
+		settings->setDefault("client_mapblock_limit", "1200"); // ~19 MB
+		settings->setDefault("mesh_generation_threads", "1");
+		settings->setDefault("max_block_send_distance", "8");
+		settings->setDefault("active_block_range", "2");
+		settings->setDefault("max_block_generate_distance", "4");
+		// Game-side knobs, picked up by the bundled game via minetest.settings
+		settings->setDefault("mcl_weather_rain_particles", "100");
+		settings->setDefault("mcl_weather_thunder_particles", "160");
+		settings->setDefault("mcl_weather_snow_particles", "25");
+		settings->setDefault("mcl_weather_dust_particles", "40");
+		settings->setDefault("mcl_mob_cap_total", "160");
+		settings->setDefault("mcl_mob_cap_hostile", "100");
+		break;
+
+	case PerfTier::LOW:
+		settings->setDefault("viewing_range", "72");
+		settings->setDefault("fps_max", "40");
+		settings->setDefault("leaves_style", "simple");
+		settings->setDefault("smooth_lighting", "true");
+		settings->setDefault("enable_3d_clouds", "false");
+		settings->setDefault("menu_clouds", "false");
+		settings->setDefault("translucent_liquids", "false");
+		settings->setDefault("client_mesh_chunk", "3");
+		settings->setDefault("client_mapblock_limit", "2000"); // ~32 MB
+		settings->setDefault("mesh_generation_threads", "1");
+		settings->setDefault("max_block_send_distance", "10");
+		settings->setDefault("mcl_weather_rain_particles", "250");
+		settings->setDefault("mcl_weather_thunder_particles", "400");
+		settings->setDefault("mcl_weather_snow_particles", "60");
+		settings->setDefault("mcl_weather_dust_particles", "80");
+		settings->setDefault("mcl_mob_cap_total", "300");
+		settings->setDefault("mcl_mob_cap_hostile", "180");
+		break;
+
+	case PerfTier::MID:
+		settings->setDefault("viewing_range", "96");
+		settings->setDefault("fps_max", "60");
+		settings->setDefault("leaves_style", "fancy");
+		settings->setDefault("smooth_lighting", "true");
+		settings->setDefault("enable_3d_clouds", "true");
+		settings->setDefault("cloud_radius", "8");
+		settings->setDefault("client_mesh_chunk", "2");
+		settings->setDefault("client_mapblock_limit", "2600"); // ~41 MB
+		settings->setDefault("active_block_range", "3");
+		settings->setDefault("max_block_generate_distance", "5");
+		settings->setDefault("mcl_weather_rain_particles", "400");
+		settings->setDefault("mcl_mob_cap_total", "400");
+		settings->setDefault("mcl_mob_cap_hostile", "240");
+		break;
+
+	case PerfTier::HIGH:
+		settings->setDefault("viewing_range", "128");
+		settings->setDefault("fps_max", "60");
+		settings->setDefault("leaves_style", "fancy");
+		settings->setDefault("smooth_lighting", "true");
+		settings->setDefault("enable_3d_clouds", "true");
+		settings->setDefault("cloud_radius", "12");
+		settings->setDefault("client_mesh_chunk", "2");
+		settings->setDefault("client_mapblock_limit", "3400"); // ~54 MB
+		settings->setDefault("active_block_range", "3");
+		settings->setDefault("max_block_generate_distance", "5");
+		break;
+	}
 }

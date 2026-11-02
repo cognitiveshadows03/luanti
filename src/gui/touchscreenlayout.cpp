@@ -212,8 +212,49 @@ ButtonLayout ButtonLayout::postProcessLoaded(const ButtonMap &data)
 	return layout;
 }
 
+/*
+	Minecraft-Bedrock-style touch controls.
+
+	A compact 2x2 diamond in the bottom-right corner, where a right thumb rests
+	naturally: jump (big, closest to the corner), sneak, fly and inventory.
+	Chat and the overflow menu sit in the top-right corner, out of the way of
+	gameplay. The movement joystick stays in the bottom-left corner, exactly
+	like Minecraft. No zoom / aux1 / minimap buttons, because stock Minecraft
+	has none.
+*/
+const ButtonLayout::ButtonMap ButtonLayout::minecraft_data {
+	{jump_id, {
+		v2f(1.0f, 1.0f),
+		v2f(-1.2f, -1.2f),
+	}},
+	{sneak_id, {
+		v2f(1.0f, 1.0f),
+		v2f(-2.5f, -1.2f),
+	}},
+	{fly_id, {
+		v2f(1.0f, 1.0f),
+		v2f(-1.2f, -2.5f),
+	}},
+	{inventory_id, {
+		v2f(1.0f, 1.0f),
+		v2f(-2.5f, -2.5f),
+	}},
+	{chat_id, {
+		v2f(1.0f, 0.0f),
+		v2f(-0.75f, 0.75f),
+	}},
+	{overflow_id, {
+		v2f(1.0f, 0.0f),
+		v2f(-0.75f, 1.95f),
+	}},
+};
+
 ButtonLayout ButtonLayout::loadDefault()
 {
+	// "" means "not chosen yet" -> keep the Luanti default.
+	const std::string preset = g_settings->get("touch_layout_preset");
+	if (preset == "minecraft")
+		return postProcessLoaded(minecraft_data);
 	return postProcessLoaded(default_data);
 }
 
